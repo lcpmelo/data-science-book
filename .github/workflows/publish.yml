@@ -7,10 +7,19 @@ on:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v3
 
       - uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Install R packages
+        run: |
+          Rscript -e "install.packages(c('tidyverse', 'ggplot2', 'dplyr', 'fastDummies', 'forcats', 'tidymodels', 'baguette', 'tune', 'rpart', 'glmnet', 'ranger', 'xgboost', 'kernlab', 'earth', 'nnet', 'vip', 'recipes', 'finetune', 'workflowsets'))"
+          Rscript -e "install.packages('googlesheets4', repos = 'https://cloud.r-project.org')"
 
       - name: Render Quarto Book
         run: quarto render
@@ -21,3 +30,4 @@ jobs:
           target: gh-pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
