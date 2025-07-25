@@ -1,0 +1,498 @@
+---
+title: "TP AS"
+format: html
+author: Lucas Emanuel Pereira de Melo
+editor: visual
+execute: 
+  warning: false
+  message: false
+---
+
+## Carregamento dos dados e pré-processamento
+
+```{r}
+# Pacotes
+library(googlesheets4)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(fastDummies)
+library(forcats)
+library(googlesheets4)
+library(tidyverse)
+library(dplyr)
+library(fastDummies)
+library(forcats)
+library(tidymodels)
+library(baguette)
+library(tune) 
+library(rpart) 
+library(glmnet)
+library(ranger) 
+library(xgboost) 
+library(kernlab) 
+library(earth)
+library(nnet) 
+library(vip)
+```
+
+```{r}
+# Carregando a planilha para a variável
+url_da_planilha <- "https://docs.google.com/spreadsheets/d/1TXfLAFdW9s5dNN3xLO5eFinL5s6_oyzbPv7zVXWCyIk/edit?gid=0#gid=0"
+
+# Criando um dataset com os dados da planilha
+dados <- read_sheet(url_da_planilha, range = "E3:N194")
+```
+
+```{r}
+# Visualizar as primeiras linhas do dataframe
+head(dados)
+```
+
+```{r}
+# Contar o total de dados ausentes no dataframe inteiro
+sum(is.na(dados))
+```
+
+```{r}
+# Contar dados ausentes em cada coluna do dataset
+colSums(is.na(dados))
+```
+
+Como o dataset possui um número relativamente pequeno de observações, optamos por estimar os valores ausentes ao invés de remover as observações. Para isso, foi utilizado o método de imputação, tanto para as variáveis numéricas (vagas de carro), quanto para as variáveis categóricas (bairro), utilizando o pacote dplyr.
+
+Para as variáveis numéricas, utilizamos a mediana para prever os valores ausentes.
+
+Já para as variáveis categóricas, foi utilizada a moda, ou seja, os valores ausentes foram substituídos pelo valor que aparece com maior frequência.
+
+```{r}
+dados_imputados <- dados %>%
+  mutate(
+    `vagas_carro` = ifelse(is.na(`vagas_carro`),
+                              median(`vagas_carro`, na.rm = TRUE),
+                              `vagas_carro`)
+  )
+
+get_mode <- function(v) {
+  uniqv <- unique(v[!is.na(v)]) 
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+dados_aluguel <- dados_imputados %>%
+  mutate(
+    bairro = ifelse(is.na(bairro),
+                    get_mode(bairro), 
+                    bairro)           
+  )
+
+
+# Verificando se os NAs da coluna foram substituídos
+colSums(is.na(dados_aluguel))
+```
+
+Transformando os dados das colunas categóricas de string para factor
+
+```{r}
+dados_aluguel <- dados_aluguel %>%
+  mutate(across(c(bairro, area_gourmet, mobiliado, varanda, imobiliaria, tipo), as.factor))
+ 
+head(dados_aluguel)
+names(dados_aluguel)
+class(dados_aluguel$bairro)
+```
+
+## Análise Exploratória de Dados
+
+Após tratar os dados ausentes, vamos fazer a análise exploratória de dados, que consiste em usar estatísticas e visualizações (como gráficos) para entender as relações entre as variáveis e a distribuição dos dados.
+
+### Analisando o comportamento da variável-alvo, o Preço
+
+```{r}
+library(ggplot2)
+
+# Histograma para ver a distribuição do aluguel
+ggplot(dados_aluguel, aes(x = preco)) +
+  geom_histogram(bins = 30, fill = "blue", alpha = 0.7) +
+  labs(title = "Distribuição dos Valores de Aluguel", x = "Valor do Aluguel (R$)", y = "Frequência")
+
+# Dica: Se a distribuição for muito assimétrica, modelos lineares funcionam melhor
+# com uma transformação de log na variável alvo. Ex: log(valor_aluguel)
+```
+
+É possível notar uma distribuição assimétrica positiva, com concentração à esquerda.
+
+```{r}
+library(dplyr)
+
+# 1. Defina os limites (breaks) das suas faixas.
+# O vetor começa em 0, vai até 10000 em passos de 1000, e termina com Inf (infinito)
+# para capturar qualquer valor acima de 10000.
+limites <- c(0, 600, 1000, 1500, 3000, 5000, 7500, 10000, Inf)
+
+# 2. Defina os nomes (labels) para cada faixa. Deve haver um nome a menos que o número de limites.
+nomes_faixas <- c("R$0-600", "R$601-1000", "R$1001-1500", "R$1501-3000",
+                  "R$3000-5000", "R$5001-7500", "R$7501-10000", "Acima de R$10000")
+
+tabela_frequencia_manual <- dados_aluguel %>%
+  mutate(
+    faixa_aluguel = cut(
+      preco,
+      breaks = limites,
+      labels = nomes_faixas,
+      include.lowest = TRUE, # Inclui o valor 0 na primeira faixa
+      right = TRUE # Intervalos são (limite_inferior, limite_superior]
+    )
+  ) %>%
+  count(faixa_aluguel, name = "Quantidade") %>%
+  arrange(faixa_aluguel)
+
+# Exibe a tabela bem formatada
+print(tabela_frequencia_manual)
+```
+
+É possível notar também que a maior parte dos dados se concentram nas faixas de valores entre R\$600-1000, R\$1001-1500 e R\$1501-3000.
+
+### Relação entre variáveis numéricas e o aluguel
+
+```{r}
+# Relação entre Número de Quartos e Aluguel
+ggplot(dados_aluguel, aes(x = numero_quartos, y = preco)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red") + # Adiciona uma linha de tendência
+  labs(title = "Número de Quartos vs. Valor do Aluguel", x = "Número de Quartos", y = "Valor do Aluguel (R$)")
+
+```
+
+```{r}
+# Relação entre Número de Banheiros e Aluguel
+ggplot(dados_aluguel, aes(x = numero_banheiros, y = preco)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "purple") + # Adiciona uma linha de tendência
+  labs(title = "Número de Banheiros vs. Valor do Aluguel", x = "Número de Banheiros", y = "Valor do Aluguel (R$)")
+```
+
+```{r}
+# Relação entre Número de Vagas de Carro e Aluguel
+ggplot(dados_aluguel, aes(x = numero_banheiros, y = preco)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "yellow") + # Adiciona uma linha de tendência
+  labs(title = "Número de Vagas de Carro vs. Valor do Aluguel", x = "Número de Vagas de Carro", y = "Valor do Aluguel (R$)")
+```
+
+É possível visualizar, por meio dos gráficos, que todas as variáveis numéricas possuem uma relação linear com o atributo alvo. Isso significa que, quanto maior o número de quartos, banheiros e vagas de carro oferecidos em um aluguel, maior tende a ser o valor do aluguel.
+
+### Relação entre as variáveis categóricas e o aluguel
+
+```{r}
+ggplot(dados_aluguel, aes(x = fct_reorder(bairro, preco, .fun = median), y = preco)) +
+  geom_boxplot() +
+  labs(title = "Distribuição de Aluguel por Bairro", x = "Bairro", y = "Valor do Aluguel (R$)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotaciona o texto do eixo x
+```
+
+```{r}
+ggplot(dados_aluguel, aes(x = fct_reorder(imobiliaria, preco, .fun = median), y = preco)) +
+  geom_boxplot() +
+  labs(title = "Distribuição de Aluguel por Imobiliária ou Não", x = "Possui Imobiliária?", y = "Valor do Aluguel (R$)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotaciona o texto do eixo x
+```
+
+```{r}
+ggplot(dados_aluguel, aes(x = fct_reorder(varanda, preco, .fun = median), y = preco)) +
+  geom_boxplot() +
+  labs(title = "Distribuição de Aluguel por Varanda ou não", x = "Possui Varanda?", y = "Valor do Aluguel (R$)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotaciona o texto do eixo x
+```
+
+```{r}
+ggplot(dados_aluguel, aes(x = fct_reorder(area_gourmet, preco, .fun = median), y = preco)) +
+  geom_boxplot() +
+  labs(title = "Distribuição de Aluguel por Área Gourmet ou Não", x = "Possui Área Gourmet?", y = "Valor do Aluguel (R$)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotaciona o texto do eixo x
+```
+
+```{r}
+ggplot(dados_aluguel, aes(x = fct_reorder(area_gourmet, preco, .fun = median), y = preco)) +
+  geom_boxplot() +
+  labs(title = "Distribuição de Aluguel por Mobiliado ou Não Mobiliado", x = "É mobiliado?", y = "Valor do Aluguel (R$)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotaciona o texto do eixo x
+```
+
+```{r}
+ggplot(dados_aluguel, aes(x = fct_reorder(tipo, preco, .fun = median), y = preco)) +
+  geom_boxplot() +
+  labs(title = "Distribuição de Aluguel por Tipo", x = "Tipo", y = "Valor do Aluguel (R$)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotaciona o texto do eixo x
+```
+
+Agora, vamos separar os dados de treino e teste:
+
+```{r}
+library(tidymodels)
+set.seed(16)
+dados_split <- initial_split(dados_aluguel, 
+                              prop = 0.75)
+  
+dados_treino <- training(dados_split)
+dados_teste  <- testing(dados_split)
+#analisar se são os melhores parâmetros mesmo
+set.seed(17)
+dados_folds <- 
+  vfold_cv(v = 10, dados_treino, repeats = 2)
+```
+
+Definindo a receita para a normalização dos dados, fazendo com que as variáveis preditoras tenham uma média de 0 e um desvio padrão de 1 (devido aos modelos sensíveis a escala)
+
+```{r}
+library(recipes)
+
+aluguel_receita <-
+  recipe(preco ~ ., data = dados_treino) |>
+  step_zv(all_predictors()) |> # Remove colunas com variância zero
+  step_normalize(all_numeric_predictors()) |>
+  # Adiciona o step_dummy para as colunas categóricas
+  step_dummy(all_nominal_predictors()) # Pega as categóricas e cria as dummies
+
+```
+
+Definindo os modelos de regressão a serem testados:
+
+```{r}
+linear_reg_spec <- 
+  linear_reg(penalty = tune(), mixture = tune()) |> 
+  set_engine("glmnet")
+
+tree_spec <- decision_tree(tree_depth = tune(), min_n = tune(), cost_complexity = tune()) |> 
+  set_engine("rpart") |> 
+  set_mode("regression")
+
+bag_cart_spec <- 
+   bag_tree(tree_depth = tune(), min_n = tune(), cost_complexity = tune()) |> 
+   set_engine("rpart") |> 
+   set_mode("regression")
+
+rforest_spec <- rand_forest(mtry = tune(), min_n = tune(), trees = tune()) |> 
+  set_engine("ranger", importance = "permutation") |>
+  set_mode("regression")
+
+xgb_spec <- # evolution of GBM
+  boost_tree(tree_depth = tune(), learn_rate = tune(), loss_reduction = tune(), 
+             min_n = tune(), sample_size = tune(), trees = tune()) |> 
+  set_engine("xgboost") |> 
+  set_mode("regression")
+
+svm_r_spec <- 
+  svm_rbf(cost = tune(), rbf_sigma = tune()) |> 
+  set_engine("kernlab") |> 
+  set_mode("regression")
+
+svm_p_spec <- 
+  svm_poly(cost = tune(), degree = tune()) |> 
+  set_engine("kernlab") |> 
+  set_mode("regression")
+
+mars_spec <- # method similar to GAM
+   mars(prod_degree = tune()) %>%  
+   set_engine("earth") %>% 
+   set_mode("regression")
+
+nnet_spec <- 
+  mlp(hidden_units = tune(), penalty = tune(), epochs = tune()) |> 
+  set_engine("nnet", MaxNWts = 2600) |> 
+  set_mode("regression")
+
+nnet_param <- 
+  nnet_spec |> 
+  extract_parameter_set_dials() |> 
+  update(hidden_units = hidden_units(c(1, 27)))
+```
+
+Agora, definindo o workflow, que contém a receita e os modelos:
+
+```{r}
+library(baguette)
+normalized2 <- 
+  workflow_set(
+    preproc = list(normalized = aluguel_receita), 
+    models = list(linear_reg = linear_reg_spec,
+                  tree = tree_spec,
+                  bagging = bag_cart_spec,
+                  rforest = rforest_spec,
+                  XGB = xgb_spec,
+                  SVM_radial = svm_r_spec, 
+                  SVM_poly = svm_p_spec,
+                  MARS = mars_spec,
+                  neural_network = nnet_spec)
+  )
+normalized2
+```
+
+Simplificando os ID's do workflow:
+
+```{r}
+all_workflows2 <- 
+  bind_rows(normalized2) |> 
+  mutate(wflow_id = gsub("(simple_)|(normalized_)", "", wflow_id))
+all_workflows2
+```
+
+## Grid Search e Validação Cruzada
+
+```{r}
+library(finetune)
+library(workflowsets)
+race_ctrl <-
+  control_race(
+    save_pred = TRUE,
+    parallel_over = "everything",
+    save_workflow = TRUE
+  )
+
+race_results2 <-
+  all_workflows2 |>
+  workflow_map(
+    "tune_race_anova",
+    seed = 1503,
+    resamples = dados_folds,
+    grid = 25,
+    control = race_ctrl
+  )
+```
+
+Extraindo métricas para avaliar os resultados:
+
+```{r}
+collect_metrics(race_results2) |> 
+  filter(.metric == "rmse") |>
+  arrange(mean)
+```
+
+```{r}
+collect_metrics(race_results2) |> 
+  filter(.metric == "rsq") |>
+  arrange(desc(mean))
+```
+
+Visualizando o desempenho dos métodos:
+
+```{r}
+IC_rmse2 <- collect_metrics(race_results2) |> 
+  filter(.metric == "rmse") |> 
+  group_by(wflow_id) |>
+  filter(mean == min(mean)) |>
+  group_by(wflow_id) |> 
+  arrange(mean) |> 
+  ungroup()
+
+IC_r22 <- collect_metrics(race_results2) |> 
+  filter(.metric == "rsq") |> 
+  group_by(wflow_id) |>
+  filter(mean == max(mean)) |>
+  group_by(wflow_id) |> 
+  arrange(desc(mean)) |> 
+  ungroup() 
+
+IC2 <- bind_rows(IC_rmse2, IC_r22)
+
+ggplot(IC2, aes(x = factor(wflow_id, levels = unique(wflow_id)), y = mean)) +
+  facet_wrap(~.metric, scales = "free") +
+  geom_point(stat="identity", aes(color = wflow_id), pch = 1) +
+  geom_errorbar(stat="identity", aes(color = wflow_id, 
+                                     ymin=mean-1.96*std_err,
+                                     ymax=mean+1.96*std_err), width=.2) + 
+  labs(y = "", x = "method") + theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+Obtendo os níveis ótimos dos parâmetros do melhor modelo:
+
+```{r}
+best_rmse2 <- 
+  race_results2 |> 
+  extract_workflow_set_result("rforest") |> 
+  select_best(metric = "rmse")
+best_rmse2
+```
+
+```{r}
+rforest_test_results <- 
+  race_results2 |> 
+  extract_workflow("rforest") |> 
+  finalize_workflow(best_rmse2) |> 
+  last_fit(split = dados_split)
+
+collect_metrics(rforest_test_results)
+```
+
+Plotando previstos versus observados para os dados de teste dos dois melhores métodos.
+
+```{r}
+best_rmse2_2 <- 
+  race_results2 |> 
+  extract_workflow_set_result("MARS") |> 
+  select_best(metric = "rmse")
+best_rmse2_2
+```
+
+```{r}
+MARS_test_results <- 
+  race_results2 |> 
+  extract_workflow("MARS") |> 
+  finalize_workflow(best_rmse2_2) |> 
+  last_fit(split = dados_split)
+
+collect_metrics(MARS_test_results)
+```
+
+```{r}
+test_results2 <- rbind(rforest_test_results |>
+                        collect_predictions(),
+                       MARS_test_results |>
+                        collect_predictions())
+
+test_results2$method <- c(rep("rforest", nrow(rforest_test_results |>
+                        collect_predictions())),
+                         rep("MARS", nrow(MARS_test_results |>
+                        collect_predictions())))
+
+test_results2 |>
+  ggplot(aes(x = preco, y = .pred)) + 
+  geom_abline(color = "gray50", lty = 2) + 
+  geom_point(alpha = 0.2) + 
+  facet_grid(col = vars(method)) +
+  coord_obs_pred() + 
+  labs(x = "observed", y = "predicted") + 
+  theme_bw()
+```
+
+## Modelo final
+
+```{r}
+rforest_final <- race_results2 |> 
+  extract_workflow("rforest") |> 
+  finalize_workflow(best_rmse2)
+rforest_final
+```
+
+# Avaliação da Importância das Variáveis (VIP)
+
+Avaliando a importância das variáveis no modelo final (Random Forest) usando o pacote VIP.
+
+```{r}
+final_rforest_fit <- extract_workflow(rforest_test_results)
+```
+
+```{r}
+vip(final_rforest_fit, 
+    num_features = 20, 
+    geom = "col",       
+    aesthetics = list(fill = "steelblue", alpha = 0.8)) +
+  labs(
+    title = "Importância das Variáveis para Previsão do Preço do Aluguel",
+    subtitle = "Modelo Final: Random Forest",
+    y = "Importância (medida por impureza de Gini)",
+    x = "Variáveis"
+  ) +
+  theme_light()
+```

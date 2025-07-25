@@ -1,0 +1,12 @@
+---
+title: "teste"
+format: html
+editor: visual
+---
+# Bem-vindo ao Meu Portfólio
+
+Este é o espaço onde eu documento meus projetos e estudos em Ciência de Dados.
+
+O primeiro projeto, sobre Aprendizado Supervisionado, pode ser encontrado no capítulo ao lado.
+
+Navegue pela barra lateral para ver os projetos.

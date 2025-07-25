@@ -1,0 +1,15 @@
+# Arquivo: _quarto.yml
+
+project:
+  type: book
+
+book:
+  title: "Data Science Portfolio"
+  author: "Lucas Melo" # <-- Coloque seu nome aqui
+  chapters:
+    - index.qmd      # Página inicial (vamos criar em seguida)
+    - supervised-learning.qmd        # Seu primeiro capítulo!
+
+format:
+  html:
+    theme: cosmo # Você pode escolher outros temas depois: https://quarto.org/docs/output-formats/html-themes.html
