@@ -1,9 +1,8 @@
 on:
   push:
-    branches:
-      - main 
+    branches: main
 
-name: Render and Deploy Quarto Book
+name: Render and Deploy Quarto Project
 
 jobs:
   build-deploy:
@@ -17,10 +16,7 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
-      - name: Render Quarto Book
-        uses: quarto-dev/quarto-actions/render@v1
-
       - name: Publish to GitHub Pages
-        uses: quarto-dev/quarto-actions/publish@v1
+        uses: quarto-dev/quarto-actions/publish@v2
         with:
-          target-dir: _book
+          target: gh-pages
