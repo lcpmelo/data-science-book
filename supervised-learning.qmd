@@ -13,6 +13,7 @@ execute:
 ```{r}
 # Pacotes
 library(googlesheets4)
+gs4_deauth()
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
