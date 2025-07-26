@@ -18,8 +18,11 @@ jobs:
 
       - name: Install R packages
         run: |
-          Rscript -e "install.packages(c('tidyverse', 'ggplot2', 'dplyr', 'fastDummies', 'forcats', 'tidymodels', 'baguette', 'tune', 'rpart', 'glmnet', 'ranger', 'xgboost', 'kernlab', 'earth', 'nnet', 'vip', 'recipes', 'finetune', 'workflowsets'))"
-          Rscript -e "install.packages('googlesheets4', repos = 'https://cloud.r-project.org')"
+          Rscript -e "install.packages(c(
+          'tidyverse', 'ggplot2', 'dplyr', 'fastDummies', 'forcats',
+          'tidymodels', 'baguette', 'tune', 'rpart', 'glmnet', 'ranger',
+          'xgboost', 'kernlab', 'earth', 'nnet', 'vip', 'recipes',
+          'finetune', 'workflowsets', 'googlesheets4'), repos = 'https://cloud.r-project.org')"
 
       - name: Render Quarto Book
         run: quarto render
