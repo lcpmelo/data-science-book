@@ -12,14 +12,11 @@ execute:
 
 ```{r}
 # Pacotes
-library(googlesheets4)
-gs4_deauth()
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(fastDummies)
 library(forcats)
-library(googlesheets4)
 library(tidyverse)
 library(dplyr)
 library(fastDummies)
@@ -38,11 +35,13 @@ library(vip)
 ```
 
 ```{r}
-# Carregando a planilha para a variável
-url_da_planilha <- "https://docs.google.com/spreadsheets/d/1TXfLAFdW9s5dNN3xLO5eFinL5s6_oyzbPv7zVXWCyIk/edit?gid=0#gid=0"
+# Geralmente já instalado com o tidyverse
+library(readr) 
 
-# Criando um dataset com os dados da planilha
-dados <- read_sheet(url_da_planilha, range = "E3:N194")
+caminho_arquivo <- "data/data_alugueis.csv"
+dados <- read_csv(caminho_arquivo)
+
+head(dados)
 ```
 
 ```{r}
