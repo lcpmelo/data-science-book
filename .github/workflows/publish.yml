@@ -1,4 +1,4 @@
-name: Quarto Book
+name: Publish Quarto Book
 
 on:
   push:
@@ -8,13 +8,12 @@ jobs:
   build-deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Setup Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -22,12 +21,22 @@ jobs:
       - name: Install R packages
         run: |
           Rscript -e "install.packages(c(
-          'tidyverse', 'ggplot2', 'dplyr', 'fastDummies', 'forcats',
+          'tidyverse', 'ggplot2', 'dplyr', 'fastDummies', 'forcats', 'readr',
           'tidymodels', 'baguette', 'tune', 'rpart', 'glmnet', 'ranger',
           'xgboost', 'kernlab', 'earth', 'nnet', 'vip', 'recipes',
           'finetune', 'workflowsets'), repos = 'https://cloud.r-project.org')"
 
-      - name: Publish to GitHub Pages
-        uses: quarto-dev/quarto-actions/publish@v2
+      - name: Setup Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render Quarto Book
+        uses: quarto-dev/quarto-actions/render@v1
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          target: gh-pages
+          path: _book
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
